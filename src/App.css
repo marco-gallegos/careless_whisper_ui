@@ -1,0 +1,18 @@
+.App {
+  min-height: 100vh;
+  background-color: #f8f9fa;
+}
+
+.translation-card {
+  transition: transform 0.2s ease;
+}
+
+.translation-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.copy-success {
+  color: #28a745;
+  font-size: 0.8rem;
+}
