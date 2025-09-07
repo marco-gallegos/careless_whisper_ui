@@ -1,42 +1,50 @@
-import { useState } from 'react'
-import { Card, Button, ListGroup, Badge, Alert } from 'react-bootstrap'
-import { useAudioTranslation } from '../context/AudioTranslationContext'
+import { useState } from "react";
+import { Card, Button, ListGroup, Badge, Alert } from "react-bootstrap";
+import { useAudioTranslation } from "../context/AudioTranslationContext";
 
 function TranslationHistory() {
-  const { translations, copyToClipboard, deleteTranslation } = useAudioTranslation()
-  const [copiedId, setCopiedId] = useState(null)
+  const {
+    translations,
+    copyToClipboard,
+    deleteTranslation,
+    reprocessTranslation,
+    isTranslating,
+  } = useAudioTranslation();
+  const [copiedId, setCopiedId] = useState(null);
 
   const handleCopy = async (text, id) => {
-    const success = await copyToClipboard(text)
+    const success = await copyToClipboard(text);
     if (success) {
-      setCopiedId(id)
-      setTimeout(() => setCopiedId(null), 2000)
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
     }
-  }
+  };
 
   const formatDate = (timestamp) => {
-    return new Date(timestamp).toLocaleString()
-  }
+    return new Date(timestamp).toLocaleString();
+  };
 
   const formatDuration = (seconds) => {
-    if (!seconds || seconds === 0) return ''
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
+    if (!seconds || seconds === 0) return "";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
 
   const truncateText = (text, maxLength = 100) => {
-    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text
-  }
+    return text.length > maxLength
+      ? text.substring(0, maxLength) + "..."
+      : text;
+  };
 
   const playAudio = (translation) => {
     if (translation.audioUrl) {
-      const audio = new Audio(translation.audioUrl)
-      audio.play().catch(error => {
-        console.error('Error playing audio:', error)
-      })
+      const audio = new Audio(translation.audioUrl);
+      audio.play().catch((error) => {
+        console.error("Error playing audio:", error);
+      });
     }
-  }
+  };
 
   if (translations.length === 0) {
     return (
@@ -46,11 +54,12 @@ function TranslationHistory() {
         </Card.Header>
         <Card.Body>
           <Alert variant="info" className="text-center">
-            No translations yet. Start recording to see your translation history here.
+            No translations yet. Start recording to see your translation history
+            here.
           </Alert>
         </Card.Body>
       </Card>
-    )
+    );
   }
 
   return (
@@ -59,11 +68,11 @@ function TranslationHistory() {
         <h5 className="mb-0">Translation History</h5>
         <Badge bg="secondary">{translations.length} translations</Badge>
       </Card.Header>
-      <Card.Body style={{ maxHeight: '400px', overflowY: 'auto' }}>
+      <Card.Body style={{ maxHeight: "400px", overflowY: "auto" }}>
         <ListGroup variant="flush">
           {translations.map((translation) => (
-            <ListGroup.Item 
-              key={translation.id} 
+            <ListGroup.Item
+              key={translation.id}
               className="translation-card border rounded mb-2 p-3"
             >
               <div className="d-flex justify-content-between align-items-start">
@@ -112,6 +121,30 @@ function TranslationHistory() {
                     </Button>
                   )}
                   <Button
+                    variant="outline-info"
+                    size="sm"
+                    onClick={() => reprocessTranslation(translation.id)}
+                    className="me-2"
+                    disabled={isTranslating}
+                    title="Reprocess translation"
+                  >
+                    {isTranslating ? (
+                      <>
+                        <span
+                          className="spinner-border spinner-border-sm me-1"
+                          role="status"
+                          aria-hidden="true"
+                        ></span>
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-arrow-clockwise me-1"></i>
+                        Reprocess
+                      </>
+                    )}
+                  </Button>
+                  <Button
                     variant="outline-danger"
                     size="sm"
                     onClick={() => deleteTranslation(translation.id)}
@@ -120,10 +153,13 @@ function TranslationHistory() {
                   </Button>
                 </div>
               </div>
-              
+
               {translation.text.length > 100 && (
                 <details className="mt-2">
-                  <summary className="text-primary" style={{ cursor: 'pointer' }}>
+                  <summary
+                    className="text-primary"
+                    style={{ cursor: "pointer" }}
+                  >
                     Show full text
                   </summary>
                   <p className="mt-2 mb-0">{translation.text}</p>
@@ -134,7 +170,7 @@ function TranslationHistory() {
         </ListGroup>
       </Card.Body>
     </Card>
-  )
+  );
 }
 
-export default TranslationHistory
+export default TranslationHistory;

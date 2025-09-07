@@ -1,107 +1,106 @@
-import { useState, useRef, useEffect } from 'react'
-import { Card, Button, Alert, Spinner } from 'react-bootstrap'
-import { useAudioTranslation } from '../context/AudioTranslationContext'
-import AudioVisualizer from './AudioVisualizer'
+import { useState, useRef, useEffect } from "react";
+import { Card, Button, Alert, Spinner } from "react-bootstrap";
+import { useAudioTranslation } from "../context/AudioTranslationContext";
+import AudioVisualizer from "./AudioVisualizer";
 
 function AudioRecorder() {
-  const [mediaRecorder, setMediaRecorder] = useState(null)
-  const [audioChunks, setAudioChunks] = useState([])
-  const [recordingTime, setRecordingTime] = useState(0)
-  const [stream, setStream] = useState(null)
-  const intervalRef = useRef(null)
-  
-  const { 
-    isRecording, 
-    isTranslating, 
-    error, 
-    addTranslation, 
-    setRecording, 
-    clearError 
-  } = useAudioTranslation()
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [stream, setStream] = useState(null);
+  const intervalRef = useRef(null);
+
+  const {
+    isRecording,
+    isTranslating,
+    error,
+    addTranslation,
+    setRecording,
+    clearError,
+  } = useAudioTranslation();
 
   useEffect(() => {
     return () => {
       if (stream) {
-        stream.getTracks().forEach(track => track.stop())
+        stream.getTracks().forEach((track) => track.stop());
       }
       if (intervalRef.current) {
-        clearInterval(intervalRef.current)
+        clearInterval(intervalRef.current);
       }
-    }
-  }, [stream])
+    };
+  }, [stream]);
 
   const startRecording = async () => {
     try {
-      clearError()
-      const audioStream = await navigator.mediaDevices.getUserMedia({ 
+      clearError();
+      const audioStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          sampleRate: 44100
-        } 
-      })
-      
-      setStream(audioStream)
-      
+          sampleRate: 44100,
+        },
+      });
+
+      setStream(audioStream);
+
       const recorder = new MediaRecorder(audioStream, {
-        mimeType: 'audio/webm;codecs=opus'
-      })
-      
-      const chunks = []
-      
+        mimeType: "audio/webm;codecs=opus",
+      });
+
+      const chunks = [];
+
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          chunks.push(event.data)
+          chunks.push(event.data);
         }
-      }
-      
+      };
+
       recorder.onstop = async () => {
-        const audioBlob = new Blob(chunks, { type: 'audio/webm;codecs=opus' })
-        
+        const audioBlob = new Blob(chunks, { type: "audio/webm;codecs=opus" });
+
         // Pass the actual recording duration
-        await addTranslation(audioBlob, recordingTime)
-        setAudioChunks([])
-      }
-      
-      setMediaRecorder(recorder)
-      setAudioChunks(chunks)
-      recorder.start(1000) // Collect data every second
-      setRecording(true)
-      setRecordingTime(0)
-      
+        await addTranslation(audioBlob, recordingTime);
+      };
+
+      setMediaRecorder(recorder);
+      recorder.start(1000); // Collect data every second
+      setRecording(true);
+      setRecordingTime(0);
+
       // Start timer
       intervalRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1)
-      }, 1000)
-      
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
     } catch (error) {
-      console.error('Error starting recording:', error)
-      setRecording(false)
+      console.error("Error starting recording:", error);
+      setRecording(false);
     }
-  }
+  };
 
   const stopRecording = () => {
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      mediaRecorder.stop()
-      setRecording(false)
-      
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+      setRecording(false);
+
       if (stream) {
-        stream.getTracks().forEach(track => track.stop())
-        setStream(null)
+        stream.getTracks().forEach((track) => track.stop());
+        setStream(null);
       }
-      
+
       if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     }
-  }
+  };
 
   const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-  }
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`;
+  };
 
   return (
     <Card>
@@ -114,7 +113,7 @@ function AudioRecorder() {
             {error}
           </Alert>
         )}
-        
+
         <div className="text-center mb-3">
           <Button
             variant={isRecording ? "danger" : "primary"}
@@ -136,15 +135,15 @@ function AudioRecorder() {
             )}
           </Button>
         </div>
-        
+
         {isRecording && (
           <div className="text-center mb-3">
             <h4 className="text-primary">{formatTime(recordingTime)}</h4>
           </div>
         )}
-        
+
         <AudioVisualizer stream={stream} isRecording={isRecording} />
-        
+
         {isTranslating && (
           <div className="text-center mt-3">
             <Spinner animation="border" variant="primary" />
@@ -153,7 +152,7 @@ function AudioRecorder() {
         )}
       </Card.Body>
     </Card>
-  )
+  );
 }
 
-export default AudioRecorder
+export default AudioRecorder;

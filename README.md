@@ -6,6 +6,7 @@ A modern React web application for recording audio and translating it to text us
 
 - 🎤 **Audio Recording**: Record audio with live visualization
 - 🔄 **Speech-to-Text Translation**: Convert audio to text using AI services
+- 🔄 **Reprocess Translations**: Re-run translation on existing audio recordings
 - 💾 **Local Storage**: Store recordings and translations locally using IndexedDB
 - 📋 **Auto-Copy**: Automatically copy latest translation to clipboard
 - 📚 **Translation History**: Browse and manage previous translations
@@ -88,7 +89,8 @@ By default, the app runs in mock mode with simulated translations. To use real t
 3. **Auto-Translation**: Audio is automatically sent for translation when recording stops
 4. **Auto-Copy**: Latest translation is automatically copied to clipboard
 5. **Browse History**: View all previous translations in the history panel
-6. **Export Data**: Export your translations to various formats
+6. **Reprocess Translations**: Click the reprocess button on any translation to get a new AI-generated transcription
+7. **Export Data**: Export your translations to various formats
 
 ## Export Options
 
