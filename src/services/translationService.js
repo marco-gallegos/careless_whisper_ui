@@ -7,7 +7,7 @@
 export const providers = {
   // careless_whisper API: POST {base}/transcribe-text-only?model=... -> { text }
   local: {
-    defaultUrl: "http://localhost:6666",
+    defaultUrl: "http://localhost:8765",
     defaultModel: "base",
     buildRequest({ baseUrl, model, apiKey }, formData) {
       return {

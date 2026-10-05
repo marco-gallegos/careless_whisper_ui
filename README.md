@@ -76,7 +76,7 @@ npm run build
 | Variable | Default | Description |
 | --- | --- | --- |
 | `VITE_TRANSCRIPTION_PROVIDER` | `local` | `local` (careless_whisper API) or `openai` (any OpenAI-compatible server) |
-| `VITE_TRANSCRIPTION_API_URL` | provider default (`http://localhost:6666` / `https://api.openai.com/v1`) | Base URL override, use your own endpoint |
+| `VITE_TRANSCRIPTION_API_URL` | provider default (`http://localhost:8765` / `https://api.openai.com/v1`) | Base URL override, use your own endpoint |
 | `VITE_WHISPER_MODEL` | `base` (local) / `whisper-1` (openai) | Model name sent to the service |
 | `VITE_TRANSCRIPTION_API_KEY` | _empty_ | Optional bearer token (bundled into client code, not a secret) |
 
@@ -86,6 +86,20 @@ Google Speech-to-Text and Azure Speech were listed in earlier versions but never
 To add a provider, add an entry to `providers` in `src/services/translationService.js`.
 
 ### Recording flow
+
+```mermaid
+flowchart TD
+    A([User records audio]) --> B["Save recording to IndexedDB<br/>status: pending"]
+    B -->|save fails| E1["Show error banner<br/>(nothing saved)"]
+    B --> C["POST audio to transcription service<br/>(provider + URL from .env)"]
+    C -->|2xx with text| D["Save transcript<br/>status: done"]
+    D --> F["Copy text to clipboard"]
+    C -->|network error or non-2xx| G["Keep recording<br/>status: failed + error message"]
+    G --> H["History shows 'Not transcribed'"]
+    H -->|user clicks Transcribe| C
+    F --> I["History shows transcript"]
+    I -->|user clicks Retranscribe| C
+```
 
 1. Record → the audio is saved to IndexedDB immediately (status `pending`).
 2. The app tries to transcribe it. On success the text is saved on the record (`done`) and copied to the clipboard.
@@ -113,14 +127,14 @@ make unload    # stop it
 Verify it is up:
 
 ```bash
-curl http://localhost:6666/health
+curl http://localhost:8765/health
 ```
 
 The agent has `KeepAlive` and `RunAtLoad`, so it restarts on crash and at login.
 
 ### Troubleshooting
 
-- **"Cannot reach transcription service"** – the agent is not running or the URL is wrong. Run `make status` in the service repo and `curl http://localhost:6666/health`.
+- **"Cannot reach transcription service"** – the agent is not running or the URL is wrong. Run `make status` in the service repo and `curl http://localhost:8765/health`.
 - **`400 Unsupported file format`** – the API only accepts mp3, wav, m4a, ogg, flac, webm, mp4.
 - **Slow first request** – the API loads the Whisper model on every request (model caching is commented out in `api.py`); use a smaller model (`tiny`/`base`) for faster results.
 - **CORS errors** – the API allows all origins; if you still see one, the service is probably down (the browser reports it as CORS).

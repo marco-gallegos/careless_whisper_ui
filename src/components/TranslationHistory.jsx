@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Card, Button, ListGroup, Badge, Alert } from "react-bootstrap";
 import { useAudioTranslation } from "../context/AudioTranslationContext";
 
@@ -11,6 +11,8 @@ function TranslationHistory() {
     isTranslating,
   } = useAudioTranslation();
   const [copiedId, setCopiedId] = useState(null);
+  const [playingId, setPlayingId] = useState(null);
+  const audioRef = useRef(null);
 
   const handleCopy = async (text, id) => {
     const success = await copyToClipboard(text);
@@ -40,12 +42,49 @@ function TranslationHistory() {
       : text;
   };
 
-  const playAudio = (translation) => {
-    if (translation.audioUrl) {
-      const audio = new Audio(translation.audioUrl);
-      audio.play().catch((error) => {
+  // Only one recording plays at a time. The ref (not state) is the source of
+  // truth so rapid double-clicks can't start overlapping audio.
+  const stopAudio = useCallback(() => {
+    const current = audioRef.current;
+    audioRef.current = null;
+    if (current) current.audio.pause();
+    setPlayingId(null);
+  }, []);
+
+  useEffect(() => stopAudio, [stopAudio]); // stop on unmount
+
+  const playAudio = async (translation) => {
+    if (!translation.audioUrl) return;
+
+    // Clicking the playing item again stops it
+    if (audioRef.current?.id === translation.id) {
+      stopAudio();
+      return;
+    }
+
+    stopAudio();
+    const audio = new Audio(translation.audioUrl);
+    const entry = { id: translation.id, audio };
+    audioRef.current = entry;
+    setPlayingId(translation.id);
+
+    const finish = () => {
+      if (audioRef.current === entry) {
+        audioRef.current = null;
+        setPlayingId(null);
+      }
+    };
+    audio.addEventListener("ended", finish);
+    audio.addEventListener("error", finish);
+
+    try {
+      await audio.play();
+    } catch (error) {
+      // AbortError just means we stopped it before it started
+      if (error.name !== "AbortError") {
         console.error("Error playing audio:", error);
-      });
+      }
+      finish();
     }
   };
 
@@ -78,7 +117,7 @@ function TranslationHistory() {
               key={translation.id}
               className="translation-card border rounded mb-2 p-3"
             >
-              <div className="d-flex justify-content-between align-items-start">
+              <div className="d-flex flex-column flex-md-row justify-content-md-between align-items-md-start">
                 <div className="flex-grow-1">
                   {getStatus(translation) === "done" ? (
                     <p className="mb-2">
@@ -120,12 +159,12 @@ function TranslationHistory() {
                     )}
                   </div>
                 </div>
-                <div className="ms-3">
+                <div className="history-actions d-flex flex-wrap gap-2 mt-3 mt-md-0 ms-md-3">
                   <Button
                     variant="outline-primary"
                     size="sm"
                     onClick={() => handleCopy(translation.text, translation.id)}
-                    className="me-2"
+                    className="history-action flex-fill flex-md-grow-0"
                     disabled={!translation.text}
                   >
                     {copiedId === translation.id ? (
@@ -145,17 +184,31 @@ function TranslationHistory() {
                       variant="outline-secondary"
                       size="sm"
                       onClick={() => playAudio(translation)}
-                      className="me-2"
-                      title="Play audio"
+                      className="history-action flex-fill flex-md-grow-0"
+                      title={playingId === translation.id ? "Stop audio" : "Play audio"}
+                      aria-label={
+                        playingId === translation.id ? "Stop audio" : "Play audio"
+                      }
+                      aria-pressed={playingId === translation.id}
                     >
-                      <i className="bi bi-play-fill"></i>
+                      {playingId === translation.id ? (
+                        <>
+                          <i className="bi bi-stop-fill me-1"></i>
+                          Stop
+                        </>
+                      ) : (
+                        <>
+                          <i className="bi bi-play-fill me-1"></i>
+                          Play
+                        </>
+                      )}
                     </Button>
                   )}
                   <Button
                     variant="outline-info"
                     size="sm"
                     onClick={() => reprocessTranslation(translation.id)}
-                    className="me-2"
+                    className="history-action flex-fill flex-md-grow-0"
                     disabled={isTranslating}
                     title="Run transcription again on the saved audio"
                   >
@@ -181,6 +234,9 @@ function TranslationHistory() {
                     variant="outline-danger"
                     size="sm"
                     onClick={() => deleteTranslation(translation.id)}
+                    className="history-action flex-fill flex-md-grow-0"
+                    title="Delete recording"
+                    aria-label="Delete recording"
                   >
                     <i className="bi bi-trash"></i>
                   </Button>

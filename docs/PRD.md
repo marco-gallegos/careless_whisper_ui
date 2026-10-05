@@ -29,10 +29,18 @@ Single user (the owner) on a personal machine, using Chrome/Firefox/Safari with 
 
 ## 5. Core flow
 
-```
-record -> save to local DB (pending) -> try to transcribe
-                                          |-- success -> save transcript (done) -> auto-copy to clipboard
-                                          |-- failure -> keep recording (failed + error) -> user clicks "Transcribe" to retry
+```mermaid
+flowchart TD
+    A([User records audio]) --> B["Save recording to IndexedDB<br/>status: pending"]
+    B -->|save fails| E1["Show error banner<br/>(nothing saved)"]
+    B --> C["POST audio to transcription service<br/>(provider + URL from .env)"]
+    C -->|2xx with text| D["Save transcript<br/>status: done"]
+    D --> F["Copy text to clipboard"]
+    C -->|network error or non-2xx| G["Keep recording<br/>status: failed + error message"]
+    G --> H["History shows 'Not transcribed'"]
+    H -->|user clicks Transcribe| C
+    F --> I["History shows transcript"]
+    I -->|user clicks Retranscribe| C
 ```
 
 ### Functional requirements
@@ -71,7 +79,7 @@ webm; the local API accepts mp3, wav, m4a, ogg, flac, webm, mp4 and requires `ff
 
 ## 7. Local service (dependency)
 
-Repo: `~/code/python/careless_whisper`. FastAPI + OpenAI Whisper, port **6666**, CORS open to all origins,
+Repo: `~/code/python/careless_whisper`. FastAPI + OpenAI Whisper, port **8765**, CORS open to all origins,
 managed by launchd agent `com.marcogallegos.translateapi` (`RunAtLoad`, `KeepAlive`) via `make load|status|logs|reload|unload`.
 
 ## 8. Data model (IndexedDB `AudioTranslationDB.translations`)
