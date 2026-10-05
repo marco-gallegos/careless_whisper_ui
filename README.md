@@ -147,7 +147,7 @@ The agent has `KeepAlive` and `RunAtLoad`, so it restarts on crash and at login.
 4. **Auto-Copy**: Latest translation is automatically copied to clipboard
 5. **Browse History**: View all previous translations in the history panel
 6. **Reprocess Translations**: Click the reprocess button on any translation to re-run Whisper on the stored audio
-7. **Export Data**: Export your translations to various formats
+7. **Export Data**: Open the menu (☰, top right) → **Export data** to export your translations in various formats
 
 ## Export Options
 

@@ -117,7 +117,7 @@ function TranslationHistory() {
               key={translation.id}
               className="translation-card border rounded mb-2 p-3"
             >
-              <div className="d-flex flex-column flex-md-row justify-content-md-between align-items-md-start">
+              <div className="d-flex flex-column flex-xl-row justify-content-xl-between align-items-xl-start">
                 <div className="flex-grow-1">
                   {getStatus(translation) === "done" ? (
                     <p className="mb-2">
@@ -159,12 +159,12 @@ function TranslationHistory() {
                     )}
                   </div>
                 </div>
-                <div className="history-actions d-flex flex-wrap gap-2 mt-3 mt-md-0 ms-md-3">
+                <div className="history-actions d-flex flex-wrap gap-2 mt-3 mt-xl-0 ms-xl-3">
                   <Button
                     variant="outline-primary"
                     size="sm"
                     onClick={() => handleCopy(translation.text, translation.id)}
-                    className="history-action flex-fill flex-md-grow-0"
+                    className="history-action flex-fill flex-xl-grow-0"
                     disabled={!translation.text}
                   >
                     {copiedId === translation.id ? (
@@ -184,7 +184,7 @@ function TranslationHistory() {
                       variant="outline-secondary"
                       size="sm"
                       onClick={() => playAudio(translation)}
-                      className="history-action flex-fill flex-md-grow-0"
+                      className="history-action flex-fill flex-xl-grow-0"
                       title={playingId === translation.id ? "Stop audio" : "Play audio"}
                       aria-label={
                         playingId === translation.id ? "Stop audio" : "Play audio"
@@ -208,7 +208,7 @@ function TranslationHistory() {
                     variant="outline-info"
                     size="sm"
                     onClick={() => reprocessTranslation(translation.id)}
-                    className="history-action flex-fill flex-md-grow-0"
+                    className="history-action flex-fill flex-xl-grow-0"
                     disabled={isTranslating}
                     title="Run transcription again on the saved audio"
                   >
@@ -234,7 +234,7 @@ function TranslationHistory() {
                     variant="outline-danger"
                     size="sm"
                     onClick={() => deleteTranslation(translation.id)}
-                    className="history-action flex-fill flex-md-grow-0"
+                    className="history-action flex-fill flex-xl-grow-0"
                     title="Delete recording"
                     aria-label="Delete recording"
                   >

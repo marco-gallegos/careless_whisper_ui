@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Card, Button, Form, Alert, Spinner } from 'react-bootstrap'
+import PropTypes from 'prop-types'
+import { Modal, Button, Form, Alert, Spinner } from 'react-bootstrap'
 import { audioTranslationDB } from '../services/database'
 import { useAudioTranslation } from '../context/AudioTranslationContext'
 
-function ExportOptions() {
+function ExportOptions({ show, onHide }) {
   const [exportFormat, setExportFormat] = useState('json')
   const [isExporting, setIsExporting] = useState(false)
   const [exportMessage, setExportMessage] = useState('')
@@ -103,11 +104,11 @@ db.${mongoConfig.collection}.insertMany(${JSON.stringify(translations, null, 2)}
   }
 
   return (
-    <Card>
-      <Card.Header>
-        <h5 className="mb-0">Export Options</h5>
-      </Card.Header>
-      <Card.Body>
+    <Modal show={show} onHide={onHide} centered fullscreen="lg-down">
+      <Modal.Header closeButton>
+        <Modal.Title as="h5">Export Options</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
         <Form>
           <Form.Group className="mb-3">
             <Form.Label>Export Format</Form.Label>
@@ -192,9 +193,14 @@ db.${mongoConfig.collection}.insertMany(${JSON.stringify(translations, null, 2)}
             {exportMessage}
           </Alert>
         )}
-      </Card.Body>
-    </Card>
+      </Modal.Body>
+    </Modal>
   )
+}
+
+ExportOptions.propTypes = {
+  show: PropTypes.bool.isRequired,
+  onHide: PropTypes.func.isRequired,
 }
 
 export default ExportOptions

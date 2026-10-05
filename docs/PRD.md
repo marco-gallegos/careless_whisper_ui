@@ -54,7 +54,7 @@ flowchart TD
 | F5 | Each history item has a button: **Transcribe** (pending/failed) or **Retranscribe** (done). It re-sends the stored audio, and the new result replaces the text. The recording timestamp is not changed. |
 | F6 | Successful non-empty transcripts are copied to the clipboard automatically. |
 | F7 | History lists recordings newest first with play, copy (disabled when no text), transcribe/retranscribe, delete. Empty successful transcripts show "(no speech detected)". |
-| F8 | Export history as JSON, SQLite script, or MongoDB script (generated client-side; no database connection is made). |
+| F8 | Export history as JSON, SQLite script, or MongoDB script (generated client-side; no database connection is made). Reached from the navbar menu (☰ → Export data), which opens a modal (full screen on phones). |
 | F9 | Records created before `status` existed are treated as `done`. |
 | F10 | Only one transcription runs at a time (UI disables record/transcribe buttons while one is in progress). |
 
