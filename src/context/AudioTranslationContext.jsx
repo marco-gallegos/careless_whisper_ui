@@ -2,6 +2,7 @@ import { createContext, useContext, useReducer, useEffect } from "react";
 import PropTypes from "prop-types";
 import { audioTranslationDB } from "../services/database";
 import { translateAudio } from "../services/translationService";
+import { translateText, sendToAgent } from "../services/actionService";
 
 const AudioTranslationContext = createContext();
 
@@ -11,6 +12,7 @@ const initialState = {
   isTranslating: false,
   lastTranslation: null,
   error: null,
+  actionBusy: null, // { id, kind } while a translate/agent call is in flight
 };
 
 function audioTranslationReducer(state, action) {
@@ -34,6 +36,8 @@ function audioTranslationReducer(state, action) {
           t.id === action.payload.id ? action.payload : t
         ),
       };
+    case "SET_ACTION_BUSY":
+      return { ...state, actionBusy: action.payload };
     case "SET_ERROR":
       return { ...state, error: action.payload };
     case "CLEAR_ERROR":
@@ -178,8 +182,45 @@ export function AudioTranslationProvider({ children }) {
     }
   };
 
+  // Send a record's transcript to the translate or agent endpoint and keep the
+  // reply on the record. kind: "translate" | "agent"
+  const runAction = async (id, kind) => {
+    const label = kind === "translate" ? "Translation" : "Agent";
+    dispatch({ type: "CLEAR_ERROR" });
+    dispatch({ type: "SET_ACTION_BUSY", payload: { id, kind } });
+    try {
+      const record = state.translations.find((t) => t.id === id);
+      if (!record?.text) throw new Error("There is no transcript to send");
+      const meta = { id, timestamp: record.timestamp };
+
+      if (kind === "translate") {
+        const { text, language } = await translateText(record.text, meta);
+        await audioTranslationDB.update(id, {
+          translatedText: text,
+          translatedLanguage: language,
+          translatedAt: new Date().toISOString(),
+        });
+      } else {
+        const text = await sendToAgent(record.text, meta);
+        await audioTranslationDB.update(id, {
+          agentResponse: text,
+          agentAt: new Date().toISOString(),
+        });
+      }
+      await loadTranslations();
+    } catch (error) {
+      dispatch({
+        type: "SET_ERROR",
+        payload: `${label} failed: ${error.message}`,
+      });
+    } finally {
+      dispatch({ type: "SET_ACTION_BUSY", payload: null });
+    }
+  };
+
   const value = {
     ...state,
+    runAction,
     addTranslation,
     reprocessTranslation,
     copyToClipboard,

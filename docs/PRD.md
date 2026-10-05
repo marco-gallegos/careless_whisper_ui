@@ -60,6 +60,8 @@ flowchart TD
 | F11 | Keyboard: `R` toggles recording. Ignored in text fields, while a modal is open, while transcribing, with Ctrl/Cmd/Alt/Shift, and on key-repeat. A second press during the mic permission prompt is ignored. Start/stop is announced to screen readers (`aria-live`), and a key hint is shown on pointer/keyboard devices only. |
 | F13 | Keyboard actions on the latest (newest) history item, using `Space` as a leader key (press `Space`, then the letter within 1s): `Space c` copy, `Space p` play/stop, `Space d` delete. `Space` therefore no longer toggles recording. The latest item is marked with a "Latest" badge and highlighted border; the shortcuts are shown as a hint and in button tooltips. |
 | F14 | Deleting a recording **always** asks for confirmation (button or shortcut) in a modal showing the date, duration and transcript snippet. `Y` confirms, `N` or `Esc` cancels; "No" has the default focus. Deleting the item that is playing stops its audio. |
+| F16 | Each history item with a transcript has **Translate** and **Agent** buttons that send the transcript to the configured endpoint (contract above). The reply is stored on the record (`translatedText`, `translatedLanguage`, `translatedAt` / `agentResponse`, `agentAt`) and shown under the item with a Copy link. Only one such call runs at a time; failures (endpoint not configured, unreachable, non-2xx, no text in reply) appear in the error banner and leave the record unchanged. |
+| F17 | A Settings modal (navbar menu ☰ → Settings) edits all transcription/translate/agent settings. Defaults come from `.env`; entered values override them (localStorage, plain text); empty = default; "Reset to defaults" clears all overrides. Changes apply immediately without a reload. |
 | F15 | After a mouse click, the record and history action buttons are blurred so a later `Space` keyup cannot re-activate them. Keyboard activation keeps focus. |
 | F12 | Mic problems are reported in the error banner (permission denied, no microphone, other), not only in the console. |
 
@@ -81,6 +83,20 @@ Providers (`src/services/translationService.js`):
 
 Both send the file as `audio.<ext>` derived from the blob MIME type (webm by default). The service must accept
 webm; the local API accepts mp3, wav, m4a, ogg, flac, webm, mp4 and requires `ffmpeg`.
+
+### Settings and action endpoints
+
+Effective settings are resolved on every call as: **Settings UI override (localStorage) > `.env` > built-in default**.
+An empty override means "use the default". Covered settings: transcription (provider, URL, model, key), translation
+(URL, target language, key) and agent (URL, key). See the README for the env var names.
+
+The **Translate** and **Agent** history buttons `POST` JSON to their configured full URL (optional `Authorization: Bearer`):
+
+- translate: `{ "action": "translate", "text", "target_language", "id", "timestamp" }`
+- agent: `{ "action": "agent_instruction", "text", "id", "timestamp" }`
+
+The response may be plain text, a JSON string, or a JSON object whose first string field among `text`, `translation`,
+`translatedText`, `result`, `output`, `response`, `answer`, `message`, `content` is the result.
 
 ## 7. Local service (dependency)
 
@@ -105,7 +121,8 @@ No schema version bump was needed: `status` and `error` are non-indexed fields.
 
 - IndexedDB is per-browser/per-origin and can be cleared by the browser; export is the only backup.
 - A page closed while status is `pending` leaves a record stuck as "Transcribing..."; the user can still click **Transcribe**.
-- `VITE_TRANSCRIPTION_API_KEY` is shipped in the client bundle; do not use a real secret for a hosted build.
+- `VITE_*` API keys are shipped in the client bundle, and keys entered in Settings are stored in plain text in `localStorage`; do not use real secrets on a shared machine or hosted build.
+- Translate/Agent endpoints on another origin must allow CORS from the app, otherwise the browser reports a network error.
 - The local API reloads the Whisper model on every request (caching is commented out in `api.py`), so each transcription pays the load time.
 - The local API listens on `0.0.0.0` with open CORS; anyone on the network can use it.
 - Blob URLs are recreated on every list reload and not revoked (small memory leak in long sessions).

@@ -10,6 +10,8 @@ A React web application for recording audio and transcribing it to text using a 
 - 💾 **Local Storage**: Store recordings and translations locally using IndexedDB
 - 📋 **Auto-Copy**: Automatically copy latest translation to clipboard
 - 📚 **Translation History**: Browse and manage previous translations
+- 🌐 **Translate / Agent buttons**: Send a transcript to your own configurable endpoints
+- ⚙️ **Settings UI**: Override the `.env` defaults from the browser
 - 📤 **Export Options**: Export data to JSON, SQLite, or MongoDB
 - 🎨 **Modern UI**: Clean interface built with React Bootstrap
 - 📖 **Storybook**: Component documentation and testing
@@ -84,6 +86,35 @@ Vite only exposes variables prefixed with `VITE_`; restart `npm run dev` after c
 
 Google Speech-to-Text and Azure Speech were listed in earlier versions but never implemented, so they were removed.
 To add a provider, add an entry to `providers` in `src/services/translationService.js`.
+
+### Settings UI (overrides)
+
+Open the menu (☰) → **Settings**. Every value defaults to what is in `.env`; anything you enter overrides it. An empty
+field means "use the default" and the placeholder shows what that default is. Overrides are saved in this browser's
+`localStorage` (API keys included, in plain text) and take effect immediately; **Reset to defaults** clears them.
+
+| Setting | `.env` default |
+| --- | --- |
+| Transcription provider / base URL / model / API key | `VITE_TRANSCRIPTION_PROVIDER`, `VITE_TRANSCRIPTION_API_URL`, `VITE_WHISPER_MODEL`, `VITE_TRANSCRIPTION_API_KEY` |
+| Translation URL / target language / API key | `VITE_TRANSLATE_API_URL`, `VITE_TRANSLATE_TARGET_LANGUAGE` (default `English`), `VITE_TRANSLATE_API_KEY` |
+| Agent URL / API key | `VITE_AGENT_API_URL`, `VITE_AGENT_API_KEY` |
+
+### Translate and Agent buttons
+
+Each history item with a transcript has **Translate** and **Agent** buttons. Each one `POST`s JSON to its configured
+URL (the full URL; nothing is appended), with `Authorization: Bearer <key>` if a key is set:
+
+```jsonc
+// Translate
+{ "action": "translate", "text": "<transcript>", "target_language": "English", "id": 1728000000000, "timestamp": "<ISO>" }
+// Agent
+{ "action": "agent_instruction", "text": "<transcript as the instruction>", "id": 1728000000000, "timestamp": "<ISO>" }
+```
+
+The reply can be plain text, a JSON string, or a JSON object with the result as a string in the first of
+`text`, `translation`, `translatedText`, `result`, `output`, `response`, `answer`, `message`, `content`. The result is
+saved on the record and shown under it (with a Copy link). Errors (not configured, unreachable, non-2xx, no text) show in the
+error banner. If an endpoint is on another origin it must allow CORS from this app.
 
 ### Recording flow
 

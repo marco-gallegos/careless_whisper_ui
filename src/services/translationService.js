@@ -1,6 +1,8 @@
 // Transcription service with pluggable providers. The default provider is the
 // local careless_whisper API (~/code/python/careless_whisper, launchd agent).
-// Any base URL can be supplied through VITE_TRANSCRIPTION_API_URL.
+// Any base URL can be supplied through VITE_TRANSCRIPTION_API_URL or the Settings UI.
+
+import { getSettings } from "./settings";
 
 // Each provider knows its default base URL/model and how to build the request.
 // `buildRequest` returns { url, init }. Both providers reply with { text }.
@@ -36,22 +38,21 @@ function authHeaders(apiKey) {
   return apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
 }
 
-export function resolveConfig(env = import.meta.env) {
-  const name = env.VITE_TRANSCRIPTION_PROVIDER || "local";
+// Effective transcription config: Settings UI overrides > .env > provider defaults.
+// Read on every call, so saving settings takes effect immediately.
+export function resolveConfig(settings = getSettings().transcription) {
+  const name = settings.provider || "local";
   const provider = providers[name];
   if (!provider) {
     throw new Error(
-      `Unknown VITE_TRANSCRIPTION_PROVIDER "${name}". Use: ${Object.keys(providers).join(", ")}`
+      `Unknown transcription provider "${name}". Use: ${Object.keys(providers).join(", ")}`
     );
   }
   return {
     provider: name,
-    baseUrl: (env.VITE_TRANSCRIPTION_API_URL || provider.defaultUrl).replace(
-      /\/+$/,
-      ""
-    ),
-    model: env.VITE_WHISPER_MODEL || provider.defaultModel,
-    apiKey: env.VITE_TRANSCRIPTION_API_KEY || "",
+    baseUrl: (settings.url || provider.defaultUrl).replace(/\/+$/, ""),
+    model: settings.model || provider.defaultModel,
+    apiKey: settings.apiKey || "",
   };
 }
 

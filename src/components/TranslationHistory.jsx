@@ -10,6 +10,8 @@ function TranslationHistory() {
     deleteTranslation,
     reprocessTranslation,
     isTranslating,
+    runAction,
+    actionBusy,
   } = useAudioTranslation();
   const [copiedId, setCopiedId] = useState(null);
   const [playingId, setPlayingId] = useState(null);
@@ -342,6 +344,46 @@ function TranslationHistory() {
                       </>
                     )}
                   </Button>
+                  {["translate", "agent"].map((kind) => {
+                    const busy =
+                      actionBusy?.id === translation.id &&
+                      actionBusy?.kind === kind;
+                    return (
+                      <Button
+                        key={kind}
+                        variant={kind === "translate" ? "outline-success" : "outline-dark"}
+                        size="sm"
+                        onClick={() => runAction(translation.id, kind)}
+                        className="history-action flex-fill flex-xl-grow-0"
+                        disabled={!translation.text || actionBusy !== null}
+                        title={
+                          kind === "translate"
+                            ? "Send the transcript to the translation endpoint"
+                            : "Send the transcript to the agent endpoint as an instruction"
+                        }
+                      >
+                        {busy ? (
+                          <>
+                            <span
+                              className="spinner-border spinner-border-sm me-1"
+                              role="status"
+                              aria-hidden="true"
+                            ></span>
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <i
+                              className={`bi ${
+                                kind === "translate" ? "bi-translate" : "bi-robot"
+                              } me-1`}
+                            ></i>
+                            {kind === "translate" ? "Translate" : "Agent"}
+                          </>
+                        )}
+                      </Button>
+                    );
+                  })}
                   <Button
                     variant="outline-danger"
                     size="sm"
@@ -373,6 +415,46 @@ function TranslationHistory() {
                   <p className="mt-2 mb-0">{translation.text}</p>
                 </details>
               )}
+
+              {[
+                {
+                  key: "t",
+                  label: `Translation${
+                    translation.translatedLanguage
+                      ? ` (${translation.translatedLanguage})`
+                      : ""
+                  }`,
+                  text: translation.translatedText,
+                  at: translation.translatedAt,
+                },
+                {
+                  key: "a",
+                  label: "Agent response",
+                  text: translation.agentResponse,
+                  at: translation.agentAt,
+                },
+              ]
+                .filter((r) => r.text)
+                .map((r) => (
+                  <div key={r.key} className="mt-2 p-2 bg-light border rounded">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <small className="text-muted">
+                        <strong>{r.label}</strong> · {formatDate(r.at)}
+                      </small>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="p-0"
+                        onClick={() => handleCopy(r.text, `${translation.id}:${r.key}`)}
+                      >
+                        {copiedId === `${translation.id}:${r.key}` ? "Copied!" : "Copy"}
+                      </Button>
+                    </div>
+                    <p className="mb-0 mt-1" style={{ whiteSpace: "pre-wrap" }}>
+                      {r.text}
+                    </p>
+                  </div>
+                ))}
             </ListGroup.Item>
           ))}
         </ListGroup>
