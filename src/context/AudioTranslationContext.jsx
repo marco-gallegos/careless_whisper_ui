@@ -68,40 +68,64 @@ export function AudioTranslationProvider({ children }) {
     }
   };
 
-  const addTranslation = async (audioBlob, recordingDuration = 0) => {
+  // Transcribe a stored recording and persist the outcome on its record.
+  // Failure is not an error state for the app: the recording stays saved with
+  // status "failed" so the user can retry from the UI.
+  const transcribeRecord = async (id, audioBlob) => {
+    dispatch({ type: "SET_TRANSLATING", payload: true });
     try {
-      dispatch({ type: "SET_TRANSLATING", payload: true });
-      dispatch({ type: "CLEAR_ERROR" });
+      const text = await translateAudio(audioBlob);
+      await audioTranslationDB.update(id, { text, status: "done", error: null });
+      await loadTranslations();
+      if (text) await copyToClipboard(text);
+    } catch (error) {
+      try {
+        await audioTranslationDB.update(id, {
+          status: "failed",
+          error: error.message,
+        });
+        await loadTranslations();
+      } catch {
+        dispatch({
+          type: "SET_ERROR",
+          payload: "Failed to update recording: " + error.message,
+        });
+      }
+    } finally {
+      dispatch({ type: "SET_TRANSLATING", payload: false });
+    }
+  };
 
-      const translation = await translateAudio(audioBlob);
+  // record -> save locally -> try to transcribe
+  const addTranslation = async (audioBlob, recordingDuration = 0) => {
+    const id = Date.now();
+    try {
+      dispatch({ type: "CLEAR_ERROR" });
 
       // Calculate audio duration if not provided
       const duration = recordingDuration || (await getAudioDuration(audioBlob));
 
-      const translationRecord = {
-        id: Date.now(),
+      // 1. Save the recording first so it is never lost
+      await audioTranslationDB.add({
+        id,
         audioBlob, // This will be converted to ArrayBuffer in the database
-        text: translation,
+        text: "",
+        status: "pending",
+        error: null,
         timestamp: new Date().toISOString(),
-        duration: duration,
-      };
-
-      // Add to database (this will handle the blob storage)
-      await audioTranslationDB.add(translationRecord);
-
-      // Reload translations to get the updated list with proper blob URLs
+        duration,
+      });
       await loadTranslations();
-
-      // Auto-copy to clipboard
-      await copyToClipboard(translation);
     } catch (error) {
       dispatch({
         type: "SET_ERROR",
-        payload: "Translation failed: " + error.message,
+        payload: "Failed to save recording: " + error.message,
       });
-    } finally {
-      dispatch({ type: "SET_TRANSLATING", payload: false });
+      return;
     }
+
+    // 2. Try to transcribe; on success the transcript is saved on the record
+    await transcribeRecord(id, audioBlob);
   };
 
   const getAudioDuration = async (audioBlob) => {
@@ -138,56 +162,19 @@ export function AudioTranslationProvider({ children }) {
   };
 
   const reprocessTranslation = async (translationId) => {
+    dispatch({ type: "CLEAR_ERROR" });
     try {
-      dispatch({ type: "SET_TRANSLATING", payload: true });
-      dispatch({ type: "CLEAR_ERROR" });
-
-      // Find the translation by ID
-      const translation = state.translations.find(
-        (t) => t.id === translationId
-      );
-
-      console.debug("Translation found:", translation, translationId);
-      if (!translation) {
-        throw new Error("Translation not found");
-      }
-
-      // Get the audio blob from the database
+      // Get the stored audio from the database
       const translationFromDB = await audioTranslationDB.get(translationId);
       if (!translationFromDB || !translationFromDB.audioBlob) {
         throw new Error("Audio data not found");
       }
-
-      // Create blob from stored data
-      const audioBlob = new Blob([translationFromDB.audioBlob], {
-        type: "audio/wav",
-      });
-
-      // Get new translation
-      const newTranslationText = await translateAudio(audioBlob);
-
-      // Update the translation record
-      const updatedTranslation = {
-        ...translation,
-        text: newTranslationText,
-        timestamp: new Date().toISOString(), // Update timestamp to show it was reprocessed
-      };
-
-      // Update in database
-      await audioTranslationDB.update(translationId, updatedTranslation);
-
-      // Update in state
-      dispatch({ type: "UPDATE_TRANSLATION", payload: updatedTranslation });
-
-      // Auto-copy new translation to clipboard
-      await copyToClipboard(newTranslationText);
+      await transcribeRecord(translationId, translationFromDB.audioBlob);
     } catch (error) {
       dispatch({
         type: "SET_ERROR",
-        payload: "Reprocessing failed: " + error.message,
+        payload: "Retranscribe failed: " + error.message,
       });
-    } finally {
-      dispatch({ type: "SET_TRANSLATING", payload: false });
     }
   };
 

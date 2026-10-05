@@ -1,63 +1,106 @@
-// Mock translation service - replace with actual API calls
-export async function translateAudio(audioBlob) {
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000))
+// Transcription service with pluggable providers. The default provider is the
+// local careless_whisper API (~/code/python/careless_whisper, launchd agent).
+// Any base URL can be supplied through VITE_TRANSCRIPTION_API_URL.
 
-  // Mock translation based on audio duration
-  const duration = audioBlob.size / 1000 // Rough estimate
-
-  if (duration < 2) {
-    return "Hello, this is a short audio translation."
-  } else if (duration < 5) {
-    return "This is a medium length audio translation. The system has successfully converted your speech to text."
-  } else {
-    return "This is a longer audio translation. The advanced speech recognition system has processed your audio file and converted it into readable text format. This demonstrates the capability of the translation service to handle various audio lengths and complexities."
-  }
-}
-
-// Configuration for actual translation services
-export const translationConfig = {
-  // OpenAI Whisper API
-  openai: {
-    apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-    endpoint: 'https://api.openai.com/v1/audio/transcriptions',
-    model: 'whisper-1'
-  },
-
-  // Google Speech-to-Text
-  google: {
-    apiKey: import.meta.env.VITE_GOOGLE_API_KEY,
-    endpoint: 'https://speech.googleapis.com/v1/speech:recognize'
-  },
-
-  // Azure Speech Services
-  azure: {
-    apiKey: import.meta.env.VITE_AZURE_API_KEY,
-    region: import.meta.env.VITE_AZURE_REGION,
-    endpoint: 'https://[region].stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1'
-  }
-}
-
-// Actual implementation for OpenAI Whisper (commented out for now)
-/*
-export async function translateAudioWithOpenAI(audioBlob) {
-  const formData = new FormData()
-  formData.append('file', audioBlob, 'audio.wav')
-  formData.append('model', 'whisper-1')
-  
-  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${translationConfig.openai.apiKey}`
+// Each provider knows its default base URL/model and how to build the request.
+// `buildRequest` returns { url, init }. Both providers reply with { text }.
+export const providers = {
+  // careless_whisper API: POST {base}/transcribe-text-only?model=... -> { text }
+  local: {
+    defaultUrl: "http://localhost:6666",
+    defaultModel: "base",
+    buildRequest({ baseUrl, model, apiKey }, formData) {
+      return {
+        url: `${baseUrl}/transcribe-text-only?model=${encodeURIComponent(model)}`,
+        init: { method: "POST", body: formData, headers: authHeaders(apiKey) },
+      };
     },
-    body: formData
-  })
-  
-  if (!response.ok) {
-    throw new Error(`Translation failed: ${response.statusText}`)
-  }
-  
-  const result = await response.json()
-  return result.text
+  },
+
+  // OpenAI-compatible: POST {base}/audio/transcriptions -> { text }
+  // Works with OpenAI, Groq, whisper.cpp server, LocalAI, etc.
+  openai: {
+    defaultUrl: "https://api.openai.com/v1",
+    defaultModel: "whisper-1",
+    buildRequest({ baseUrl, model, apiKey }, formData) {
+      formData.append("model", model);
+      return {
+        url: `${baseUrl}/audio/transcriptions`,
+        init: { method: "POST", body: formData, headers: authHeaders(apiKey) },
+      };
+    },
+  },
+};
+
+function authHeaders(apiKey) {
+  return apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
 }
-*/
+
+export function resolveConfig(env = import.meta.env) {
+  const name = env.VITE_TRANSCRIPTION_PROVIDER || "local";
+  const provider = providers[name];
+  if (!provider) {
+    throw new Error(
+      `Unknown VITE_TRANSCRIPTION_PROVIDER "${name}". Use: ${Object.keys(providers).join(", ")}`
+    );
+  }
+  return {
+    provider: name,
+    baseUrl: (env.VITE_TRANSCRIPTION_API_URL || provider.defaultUrl).replace(
+      /\/+$/,
+      ""
+    ),
+    model: env.VITE_WHISPER_MODEL || provider.defaultModel,
+    apiKey: env.VITE_TRANSCRIPTION_API_KEY || "",
+  };
+}
+
+// Extensions accepted by the API (see allowed_extensions in api.py)
+const EXTENSION_BY_MIME = {
+  "audio/webm": "webm",
+  "audio/mp4": "mp4",
+  "audio/ogg": "ogg",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/mpeg": "mp3",
+  "audio/flac": "flac",
+};
+
+function getExtension(blob) {
+  const mime = (blob.type || "").split(";")[0].trim().toLowerCase();
+  return EXTENSION_BY_MIME[mime] || "webm";
+}
+
+export async function translateAudio(audioBlob) {
+  const config = resolveConfig();
+  const { baseUrl } = config;
+
+  const formData = new FormData();
+  formData.append("file", audioBlob, `audio.${getExtension(audioBlob)}`);
+
+  const { url, init } = providers[config.provider].buildRequest(
+    config,
+    formData
+  );
+
+  let response;
+  try {
+    response = await fetch(url, init);
+  } catch {
+    throw new Error(`Cannot reach transcription service at ${baseUrl}`);
+  }
+
+  if (!response.ok) {
+    let detail = response.statusText;
+    try {
+      const body = await response.json();
+      detail = body.detail || body.error?.message || detail;
+    } catch {
+      // non-JSON error body, keep statusText
+    }
+    throw new Error(`${response.status} ${detail}`);
+  }
+
+  const result = await response.json();
+  return typeof result.text === "string" ? result.text.trim() : "";
+}

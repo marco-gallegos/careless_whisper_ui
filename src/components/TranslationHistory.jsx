@@ -31,7 +31,10 @@ function TranslationHistory() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const truncateText = (text, maxLength = 100) => {
+  // Records saved before status existed always had text, so they count as done
+  const getStatus = (t) => t.status || "done";
+
+  const truncateText = (text = "", maxLength = 100) => {
     return text.length > maxLength
       ? text.substring(0, maxLength) + "..."
       : text;
@@ -77,7 +80,34 @@ function TranslationHistory() {
             >
               <div className="d-flex justify-content-between align-items-start">
                 <div className="flex-grow-1">
-                  <p className="mb-2">{truncateText(translation.text)}</p>
+                  {getStatus(translation) === "done" ? (
+                    <p className="mb-2">
+                      {truncateText(translation.text) || (
+                        <em className="text-muted">(no speech detected)</em>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="mb-2">
+                      <Badge
+                        bg={
+                          getStatus(translation) === "failed"
+                            ? "warning"
+                            : "secondary"
+                        }
+                        text={
+                          getStatus(translation) === "failed" ? "dark" : undefined
+                        }
+                        className="me-2"
+                      >
+                        {getStatus(translation) === "failed"
+                          ? "Not transcribed"
+                          : "Transcribing..."}
+                      </Badge>
+                      {translation.error && (
+                        <small className="text-muted">{translation.error}</small>
+                      )}
+                    </p>
+                  )}
                   <div className="d-flex justify-content-between align-items-center">
                     <small className="text-muted">
                       {formatDate(translation.timestamp)}
@@ -96,6 +126,7 @@ function TranslationHistory() {
                     size="sm"
                     onClick={() => handleCopy(translation.text, translation.id)}
                     className="me-2"
+                    disabled={!translation.text}
                   >
                     {copiedId === translation.id ? (
                       <>
@@ -126,7 +157,7 @@ function TranslationHistory() {
                     onClick={() => reprocessTranslation(translation.id)}
                     className="me-2"
                     disabled={isTranslating}
-                    title="Reprocess translation"
+                    title="Run transcription again on the saved audio"
                   >
                     {isTranslating ? (
                       <>
@@ -140,7 +171,9 @@ function TranslationHistory() {
                     ) : (
                       <>
                         <i className="bi bi-arrow-clockwise me-1"></i>
-                        Reprocess
+                        {getStatus(translation) === "done"
+                          ? "Retranscribe"
+                          : "Transcribe"}
                       </>
                     )}
                   </Button>
@@ -154,7 +187,7 @@ function TranslationHistory() {
                 </div>
               </div>
 
-              {translation.text.length > 100 && (
+              {(translation.text || "").length > 100 && (
                 <details className="mt-2">
                   <summary
                     className="text-primary"

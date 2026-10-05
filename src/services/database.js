@@ -118,7 +118,7 @@ class AudioTranslationDB extends Dexie {
       sql += `INSERT INTO translations (id, timestamp, text, audio_url, duration) VALUES (
         ${t.id},
         '${t.timestamp}',
-        '${t.text.replace(/'/g, "''")}',
+        '${(t.text || "").replace(/'/g, "''")}',
         '${t.audioUrl || ""}',
         ${t.duration || 0}
       );\n`;

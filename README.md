@@ -1,11 +1,11 @@
 # Audio Translator
 
-A modern React web application for recording audio and translating it to text using external AI services. Built with React 19, Vite with Rolldown, and Bootstrap.
+A React web application for recording audio and transcribing it to text using a **local Whisper service** running on this machine ([careless_whisper](../../python/careless_whisper), managed by launchd). No audio leaves your computer. Built with React 18, Vite, and Bootstrap.
 
 ## Features
 
 - 🎤 **Audio Recording**: Record audio with live visualization
-- 🔄 **Speech-to-Text Translation**: Convert audio to text using AI services
+- 🔄 **Speech-to-Text Translation**: Convert audio to text using the local Whisper API
 - 🔄 **Reprocess Translations**: Re-run translation on existing audio recordings
 - 💾 **Local Storage**: Store recordings and translations locally using IndexedDB
 - 📋 **Auto-Copy**: Automatically copy latest translation to clipboard
@@ -16,8 +16,8 @@ A modern React web application for recording audio and translating it to text us
 
 ## Tech Stack
 
-- **React 19** - Latest React with concurrent features
-- **Vite** - Fast build tool with Rolldown bundler
+- **React 18**
+- **Vite** - Fast build tool
 - **Bootstrap 5** - Responsive UI framework
 - **Dexie** - IndexedDB wrapper for local storage
 - **Storybook** - Component development environment
@@ -28,13 +28,14 @@ A modern React web application for recording audio and translating it to text us
 
 - Node.js 18+ 
 - npm or yarn
+- The local transcription service installed and running (see [Local Transcription Service](#local-transcription-service))
 
 ### Installation
 
-1. Clone the repository:
+1. Clone the repository and enter it:
 ```bash
 git clone <repository-url>
-cd audio-translator
+cd careless_whisper_ui
 ```
 
 2. Install dependencies:
@@ -47,7 +48,7 @@ npm install
 cp .env.example .env
 ```
 
-4. Configure your API keys in `.env` file for translation services
+4. (Optional) Adjust `.env` if your service runs elsewhere or you want a different model. Defaults work with the stock launchd setup.
 
 ### Development
 
@@ -70,17 +71,59 @@ npm run build
 
 ## Configuration
 
-### Translation Services
+### Environment variables
 
-The app supports multiple translation services. Configure your preferred service in `.env`:
+| Variable | Default | Description |
+| --- | --- | --- |
+| `VITE_TRANSCRIPTION_PROVIDER` | `local` | `local` (careless_whisper API) or `openai` (any OpenAI-compatible server) |
+| `VITE_TRANSCRIPTION_API_URL` | provider default (`http://localhost:6666` / `https://api.openai.com/v1`) | Base URL override, use your own endpoint |
+| `VITE_WHISPER_MODEL` | `base` (local) / `whisper-1` (openai) | Model name sent to the service |
+| `VITE_TRANSCRIPTION_API_KEY` | _empty_ | Optional bearer token (bundled into client code, not a secret) |
 
-- **OpenAI Whisper**: Set `REACT_APP_OPENAI_API_KEY`
-- **Google Speech-to-Text**: Set `REACT_APP_GOOGLE_API_KEY`  
-- **Azure Speech Services**: Set `REACT_APP_AZURE_API_KEY` and `REACT_APP_AZURE_REGION`
+Vite only exposes variables prefixed with `VITE_`; restart `npm run dev` after changing `.env`.
 
-### Mock Mode
+Google Speech-to-Text and Azure Speech were listed in earlier versions but never implemented, so they were removed.
+To add a provider, add an entry to `providers` in `src/services/translationService.js`.
 
-By default, the app runs in mock mode with simulated translations. To use real translation services, update the `translateAudio` function in `src/services/translationService.js`.
+### Recording flow
+
+1. Record → the audio is saved to IndexedDB immediately (status `pending`).
+2. The app tries to transcribe it. On success the text is saved on the record (`done`) and copied to the clipboard.
+3. On failure the recording stays saved with status `failed` and the error message. Use the **Transcribe** button in the history to retry.
+
+See [docs/PRD.md](docs/PRD.md) for the full product description.
+
+### Local Transcription Service
+
+With the `local` provider, `src/services/translationService.js` sends each recording as multipart form data to
+`POST {VITE_TRANSCRIPTION_API_URL}/transcribe-text-only?model={VITE_WHISPER_MODEL}` and uses the
+returned `text`. Recordings are `audio/webm;codecs=opus`, which the API accepts (it needs `ffmpeg`).
+
+The service lives in `~/code/python/careless_whisper` and runs as a launchd agent
+(`com.marcogallegos.translateapi`). From that directory:
+
+```bash
+make load      # install the plist into ~/Library/LaunchAgents and start it
+make status    # show launchd state, PID and recent logs
+make logs      # tail stdout/stderr
+make reload    # restart after changing api.py or the plist
+make unload    # stop it
+```
+
+Verify it is up:
+
+```bash
+curl http://localhost:6666/health
+```
+
+The agent has `KeepAlive` and `RunAtLoad`, so it restarts on crash and at login.
+
+### Troubleshooting
+
+- **"Cannot reach transcription service"** – the agent is not running or the URL is wrong. Run `make status` in the service repo and `curl http://localhost:6666/health`.
+- **`400 Unsupported file format`** – the API only accepts mp3, wav, m4a, ogg, flac, webm, mp4.
+- **Slow first request** – the API loads the Whisper model on every request (model caching is commented out in `api.py`); use a smaller model (`tiny`/`base`) for faster results.
+- **CORS errors** – the API allows all origins; if you still see one, the service is probably down (the browser reports it as CORS).
 
 ## Usage
 
@@ -89,7 +132,7 @@ By default, the app runs in mock mode with simulated translations. To use real t
 3. **Auto-Translation**: Audio is automatically sent for translation when recording stops
 4. **Auto-Copy**: Latest translation is automatically copied to clipboard
 5. **Browse History**: View all previous translations in the history panel
-6. **Reprocess Translations**: Click the reprocess button on any translation to get a new AI-generated transcription
+6. **Reprocess Translations**: Click the reprocess button on any translation to re-run Whisper on the stored audio
 7. **Export Data**: Export your translations to various formats
 
 ## Export Options
