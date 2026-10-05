@@ -21,6 +21,25 @@
   }
 }
 
+/* Keyboard hints are noise on touch devices */
+.kbd-hint {
+  display: none;
+}
+
+.kbd-inline {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .kbd-hint {
+    display: block;
+  }
+
+  .kbd-inline {
+    display: inline-block;
+  }
+}
+
 .copy-success {
   color: #28a745;
   font-size: 0.8rem;

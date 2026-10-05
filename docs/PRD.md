@@ -53,10 +53,15 @@ flowchart TD
 | F4 | On failure (network error or non-2xx) the record keeps its audio and gets `status: "failed"` plus the error message. No global error banner; the failure is shown on the record. |
 | F5 | Each history item has a button: **Transcribe** (pending/failed) or **Retranscribe** (done). It re-sends the stored audio, and the new result replaces the text. The recording timestamp is not changed. |
 | F6 | Successful non-empty transcripts are copied to the clipboard automatically. |
-| F7 | History lists recordings newest first with play, copy (disabled when no text), transcribe/retranscribe, delete. Empty successful transcripts show "(no speech detected)". |
+| F7 | History lists recordings newest first with play, copy (disabled when no text), transcribe/retranscribe, delete (with confirmation, see F14). Empty successful transcripts show "(no speech detected)". |
 | F8 | Export history as JSON, SQLite script, or MongoDB script (generated client-side; no database connection is made). Reached from the navbar menu (☰ → Export data), which opens a modal (full screen on phones). |
 | F9 | Records created before `status` existed are treated as `done`. |
 | F10 | Only one transcription runs at a time (UI disables record/transcribe buttons while one is in progress). |
+| F11 | Keyboard: `R` toggles recording. Ignored in text fields, while a modal is open, while transcribing, with Ctrl/Cmd/Alt/Shift, and on key-repeat. A second press during the mic permission prompt is ignored. Start/stop is announced to screen readers (`aria-live`), and a key hint is shown on pointer/keyboard devices only. |
+| F13 | Keyboard actions on the latest (newest) history item, using `Space` as a leader key (press `Space`, then the letter within 1s): `Space c` copy, `Space p` play/stop, `Space d` delete. `Space` therefore no longer toggles recording. The latest item is marked with a "Latest" badge and highlighted border; the shortcuts are shown as a hint and in button tooltips. |
+| F14 | Deleting a recording **always** asks for confirmation (button or shortcut) in a modal showing the date, duration and transcript snippet. `Y` confirms, `N` or `Esc` cancels; "No" has the default focus. Deleting the item that is playing stops its audio. |
+| F15 | After a mouse click, the record and history action buttons are blurred so a later `Space` keyup cannot re-activate them. Keyboard activation keeps focus. |
+| F12 | Mic problems are reported in the error banner (permission denied, no microphone, other), not only in the console. |
 
 ## 6. Transcription service contract
 

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, Button, Alert, Spinner } from "react-bootstrap";
+import { tinykeys, defaultKeybindingsHandlerIgnore } from "tinykeys";
 import { useAudioTranslation } from "../context/AudioTranslationContext";
 import AudioVisualizer from "./AudioVisualizer";
 
@@ -8,7 +9,10 @@ function AudioRecorder() {
 
   const [recordingTime, setRecordingTime] = useState(0);
   const [stream, setStream] = useState(null);
+  const [announcement, setAnnouncement] = useState("");
   const intervalRef = useRef(null);
+  const startingRef = useRef(false); // true while waiting for the mic permission prompt
+  const toggleRef = useRef(null);
 
   const {
     isRecording,
@@ -17,6 +21,7 @@ function AudioRecorder() {
     addTranslation,
     setRecording,
     clearError,
+    setError,
   } = useAudioTranslation();
 
   useEffect(() => {
@@ -31,6 +36,9 @@ function AudioRecorder() {
   }, [stream]);
 
   const startRecording = async () => {
+    // A second press while the permission prompt is open must not open a second stream
+    if (startingRef.current) return;
+    startingRef.current = true;
     try {
       clearError();
       const audioStream = await navigator.mediaDevices.getUserMedia({
@@ -66,6 +74,7 @@ function AudioRecorder() {
       recorder.start(1000); // Collect data every second
       setRecording(true);
       setRecordingTime(0);
+      setAnnouncement("Recording started");
 
       // Start timer
       intervalRef.current = setInterval(() => {
@@ -74,6 +83,15 @@ function AudioRecorder() {
     } catch (error) {
       console.error("Error starting recording:", error);
       setRecording(false);
+      setError(
+        error.name === "NotAllowedError"
+          ? "Microphone access was denied. Allow it in your browser's site settings and try again."
+          : error.name === "NotFoundError"
+            ? "No microphone found."
+            : "Could not start recording: " + error.message
+      );
+    } finally {
+      startingRef.current = false;
     }
   };
 
@@ -81,6 +99,7 @@ function AudioRecorder() {
     if (mediaRecorder && mediaRecorder.state === "recording") {
       mediaRecorder.stop();
       setRecording(false);
+      setAnnouncement("Recording stopped");
 
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
@@ -93,6 +112,42 @@ function AudioRecorder() {
       }
     }
   };
+
+  const toggleRecording = () => {
+    if (isTranslating) return; // same rule as the disabled button
+    if (isRecording) stopRecording();
+    else startRecording();
+  };
+
+  // Always point at the latest render's handler so the keydown listener never goes stale
+  useEffect(() => {
+    toggleRef.current = toggleRecording;
+  });
+
+  // Keyboard shortcut: R starts/stops recording. (Space is the leader key for
+  // the history actions, see TranslationHistory.)
+  useEffect(() => {
+    const toggle = (e) => {
+      e.preventDefault();
+      toggleRef.current?.();
+    };
+
+    // tinykeys already skips key-repeat, IME composition, typing in form
+    // fields, and any press with Ctrl/Cmd/Alt/Shift held.
+    return tinykeys(
+      window,
+      {
+        r: toggle,
+      },
+      {
+        ignore: (e) =>
+          defaultKeybindingsHandlerIgnore(e) ||
+          e.defaultPrevented ||
+          // Leave keys alone while a modal (e.g. export) is open
+          document.body.classList.contains("modal-open"),
+      }
+    );
+  }, []);
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -120,7 +175,8 @@ function AudioRecorder() {
             size="lg"
             onClick={isRecording ? stopRecording : startRecording}
             disabled={isTranslating}
-            className={isRecording ? "recording" : ""}
+            className={`record-button${isRecording ? " recording" : ""}`}
+            aria-keyshortcuts="R"
           >
             {isRecording ? (
               <>
@@ -134,6 +190,14 @@ function AudioRecorder() {
               </>
             )}
           </Button>
+          {/* Only shown on devices with a real pointer/keyboard (see App.css) */}
+          <div className="kbd-hint text-muted small mt-2">
+            Press <kbd>R</kbd> to {isRecording ? "stop" : "start"}
+          </div>
+        </div>
+
+        <div className="visually-hidden" role="status" aria-live="polite">
+          {announcement}
         </div>
 
         {isRecording && (

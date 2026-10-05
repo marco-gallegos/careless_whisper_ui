@@ -7,13 +7,21 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { AudioTranslationProvider } from "./context/AudioTranslationContext";
 import "./App.css";
 
+// Space is the leader key for history shortcuts. A button that keeps focus after a
+// mouse click would be "clicked" again by the Space keyup, so drop focus after mouse
+// clicks (detail > 0). Keyboard activation (detail === 0) keeps focus.
+function blurAfterMouseClick(e) {
+  const button = e.target.closest?.(".record-button, .history-action");
+  if (button && e.detail > 0) button.blur();
+}
+
 function App() {
   const [showExport, setShowExport] = useState(false);
 
   return (
     <ErrorBoundary>
       <AudioTranslationProvider>
-        <div className="App">
+        <div className="App" onClick={blurAfterMouseClick}>
           <Navbar bg="primary" variant="dark" className="mb-3">
             <Container fluid>
               <Navbar.Brand>🎤 Audio Translator</Navbar.Brand>

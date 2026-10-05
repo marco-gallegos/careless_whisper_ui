@@ -187,6 +187,7 @@ export function AudioTranslationProvider({ children }) {
     setRecording: (recording) =>
       dispatch({ type: "SET_RECORDING", payload: recording }),
     clearError: () => dispatch({ type: "CLEAR_ERROR" }),
+    setError: (message) => dispatch({ type: "SET_ERROR", payload: message }),
   };
 
   return (

@@ -149,6 +149,27 @@ The agent has `KeepAlive` and `RunAtLoad`, so it restarts on crash and at login.
 6. **Reprocess Translations**: Click the reprocess button on any translation to re-run Whisper on the stored audio
 7. **Export Data**: Open the menu (☰, top right) → **Export data** to export your translations in various formats
 
+## Keyboard shortcuts
+
+| Key | Action |
+| --- | --- |
+| `R` | Start / stop recording |
+| `Space` then `C` | Copy the latest recording's transcript |
+| `Space` then `P` | Play / stop the latest recording |
+| `Space` then `D` | Delete the latest recording (asks for confirmation) |
+| `Y` / `N` | Confirm / cancel in the delete dialog (`Esc` also cancels) |
+
+`Space` is a leader key: press it, then the letter within one second (holding `Space` while pressing the letter
+also works). "Latest" is the newest item in the history, marked with a **Latest** badge. Because of this, `Space` no
+longer toggles recording; use `R`.
+
+Shortcuts are ignored while typing in a field, while a dialog is open (except `Y`/`N` in the delete dialog), with
+Ctrl/Cmd/Alt/Shift held, and on key-repeat. Hints only appear on devices with a keyboard/mouse. After a mouse click the
+clicked record/action button is blurred, so a later `Space` can't re-trigger it.
+
+**Deleting always asks for confirmation**, whether by button or shortcut. "No" has the default focus, so a stray
+Enter never deletes.
+
 ## Export Options
 
 - **JSON**: Standard JSON format for backup or data analysis
