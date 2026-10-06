@@ -8,6 +8,95 @@ class AudioTranslationDB extends Dexie {
       translations:
         "++id, timestamp, text, audioUrl, duration, audioData, mimeType",
     });
+
+    // v2: favorites + tags. `favorite` (boolean) is unindexed and filtered in JS;
+    // `tags` on a record is an array of tag names, indexed per entry (*tags).
+    // The `tags` table holds tag metadata (name is the key).
+    this.version(2).stores({
+      translations:
+        "++id, timestamp, text, audioUrl, duration, audioData, mimeType, *tags",
+      tags: "name",
+    });
+
+    // v3: client-side extras for transcripts stored on the API, keyed by the server id.
+    // The API only holds text, so favorite / translation / agent reply live here
+    // (this browser only).
+    this.version(3).stores({
+      remoteMeta: "remoteId",
+    });
+  }
+
+  // --- Extras for API-stored records ---------------------------------------
+
+  async getAllMeta() {
+    const rows = await this.remoteMeta.toArray();
+    return Object.fromEntries(rows.map((r) => [r.remoteId, r]));
+  }
+
+  async patchMeta(remoteId, fields) {
+    const current = (await this.remoteMeta.get(remoteId)) || { remoteId };
+    const next = { ...current, ...fields };
+    await this.remoteMeta.put(next);
+    return next;
+  }
+
+  async deleteMeta(remoteId) {
+    return await this.remoteMeta.delete(remoteId);
+  }
+
+  // --- Favorites & tags -----------------------------------------------------
+  // Everything the UI needs for favorites/tags goes through these methods so the
+  // storage can be swapped for a backend later (see docs/PRD.md).
+
+  async setFavorite(id, favorite) {
+    return await this.translations.update(id, { favorite: !!favorite });
+  }
+
+  async setRecordTags(id, tags) {
+    return await this.translations.update(id, { tags });
+  }
+
+  async getTags() {
+    return await this.tags.orderBy("name").toArray();
+  }
+
+  async addTag(tag) {
+    await this.tags.add(tag);
+  }
+
+  async updateTagColor(name, color) {
+    return await this.tags.update(name, { color });
+  }
+
+  // Renames the tag and every record that uses it (merging if a record ends up with duplicates)
+  async renameTag(oldName, newName) {
+    await this.transaction("rw", this.translations, this.tags, async () => {
+      const existing = await this.tags.get(oldName);
+      if (!existing) throw new Error("Tag not found");
+      await this.tags.delete(oldName);
+      await this.tags.put({ ...existing, name: newName });
+      await this.translations
+        .where("tags")
+        .equals(oldName)
+        .modify((record) => {
+          record.tags = [
+            ...new Set(record.tags.map((t) => (t === oldName ? newName : t))),
+          ];
+        });
+    });
+  }
+
+  // Deletes the tag and removes it from every record
+  async deleteTag(name) {
+    await this.transaction("rw", this.translations, this.tags, async () => {
+      await this.tags.delete(name);
+      await this.translations
+        .where("tags")
+        .equals(name)
+        .modify((record) => {
+          record.tags = record.tags.filter((t) => t !== name);
+        });
+    });
   }
 
   async add(translation) {

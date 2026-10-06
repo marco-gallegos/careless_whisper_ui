@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { Card, Button, Alert, Spinner } from "react-bootstrap";
+import { Card, Button, Alert, Spinner, Form } from "react-bootstrap";
 import { tinykeys, defaultKeybindingsHandlerIgnore } from "tinykeys";
 import { useAudioTranslation } from "../context/AudioTranslationContext";
+import { useAuth } from "../context/AuthContext";
 import AudioVisualizer from "./AudioVisualizer";
 
 function AudioRecorder() {
@@ -24,6 +25,8 @@ function AudioRecorder() {
     setError,
   } = useAudioTranslation();
 
+  const { isLoggedIn, storeOnRecord, setStoreOnRecord } = useAuth();
+
   useEffect(() => {
     return () => {
       if (stream) {
@@ -41,6 +44,18 @@ function AudioRecorder() {
     startingRef.current = true;
     try {
       clearError();
+      // Browsers only expose the mic on secure origins (https or localhost). Over plain
+      // http on a LAN address navigator.mediaDevices is undefined.
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw Object.assign(
+          new Error(
+            window.isSecureContext
+              ? "This browser does not support audio recording."
+              : "Recording needs a secure connection. Open this page over https:// (or on localhost). With the dev server, run `npm run dev:lan` and use the https address."
+          ),
+          { name: "InsecureContextError" }
+        );
+      }
       const audioStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -84,7 +99,9 @@ function AudioRecorder() {
       console.error("Error starting recording:", error);
       setRecording(false);
       setError(
-        error.name === "NotAllowedError"
+        error.name === "InsecureContextError"
+          ? error.message
+          : error.name === "NotAllowedError"
           ? "Microphone access was denied. Allow it in your browser's site settings and try again."
           : error.name === "NotFoundError"
             ? "No microphone found."
@@ -194,6 +211,22 @@ function AudioRecorder() {
           <div className="kbd-hint text-muted small mt-2">
             Press <kbd>R</kbd> to {isRecording ? "stop" : "start"}
           </div>
+          {isLoggedIn && (
+            <Form.Check
+              type="switch"
+              id="store-on-record"
+              className="d-inline-block mt-3 text-start"
+              label="Store transcript on my account"
+              checked={storeOnRecord}
+              onChange={(e) => setStoreOnRecord(e.target.checked)}
+              disabled={isRecording || isTranslating}
+            />
+          )}
+          {isLoggedIn && storeOnRecord && (
+            <div className="text-muted small">
+              Stored on the API only: the audio is not kept locally.
+            </div>
+          )}
         </div>
 
         <div className="visually-hidden" role="status" aria-live="polite">

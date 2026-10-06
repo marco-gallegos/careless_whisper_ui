@@ -62,6 +62,12 @@ flowchart TD
 | F14 | Deleting a recording **always** asks for confirmation (button or shortcut) in a modal showing the date, duration and transcript snippet. `Y` confirms, `N` or `Esc` cancels; "No" has the default focus. Deleting the item that is playing stops its audio. |
 | F16 | Each history item with a transcript has **Translate** and **Agent** buttons that send the transcript to the configured endpoint (contract above). The reply is stored on the record (`translatedText`, `translatedLanguage`, `translatedAt` / `agentResponse`, `agentAt`) and shown under the item with a Copy link. Only one such call runs at a time; failures (endpoint not configured, unreachable, non-2xx, no text in reply) appear in the error banner and leave the record unchanged. |
 | F17 | A Settings modal (navbar menu ☰ → Settings) edits all transcription/translate/agent settings. Defaults come from `.env`; entered values override them (localStorage, plain text); empty = default; "Reset to defaults" clears all overrides. Changes apply immediately without a reload. |
+| F18 | Any transcript can be marked as a favorite (⭐ on the home history and in the admin list). Stored as `favorite: true/false` on the record. |
+| F19 | Admin page `#/admin` lists all transcripts with search (text, translation, agent reply, tags), a **Favorites only** switch, tag filter chips (match any), sort, result count and **Clear filters**. Query params `fav=1` and `tag=<name>` preselect filters. Rows offer favorite, edit tags, copy and delete (delete always confirms). |
+| F20 | Tag manager `#/admin/tags`: create (unique case-insensitively, trimmed, max 30 chars, color from an 8-color palette), rename, recolor, delete. Rename updates every record using the tag; delete removes it from every record but keeps the transcripts and asks for confirmation (Y/N). Shows per-tag usage counts and a link to the filtered favorites. |
+| F21 | Only favorites can be tagged (tags button disabled otherwise). Tags assigned to a record stay if it is un-favorited, but are only shown on the home page for favorites. |
+| F22 | Navigation is hash-based (no dependency): `#/` home, `#/admin`, `#/admin/tags`, reachable from the ☰ menu. Home-page keyboard shortcuts are only active on the home page. |
+| F23 | The app works from a phone on the LAN: `npm run dev:lan` serves it over HTTPS (self-signed) so the mic API is available, and the default transcription URL is the same-origin path `/whisper`, proxied by the Vite dev/preview server to the local Whisper service (`WHISPER_PROXY_TARGET`). If the mic API is unavailable (insecure origin) the error banner explains how to fix it instead of failing with a TypeError. |
 | F15 | After a mouse click, the record and history action buttons are blurred so a later `Space` keyup cannot re-activate them. Keyboard activation keeps focus. |
 | F12 | Mic problems are reported in the error banner (permission denied, no microphone, other), not only in the console. |
 
@@ -115,7 +121,25 @@ managed by launchd agent `com.marcogallegos.translateapi` (`RunAtLoad`, `KeepAli
 | `duration` | Seconds |
 | `audioData` + `mimeType` | Audio bytes (ArrayBuffer) and type; turned back into a Blob on read |
 
-No schema version bump was needed: `status` and `error` are non-indexed fields.
+Additional record fields: `favorite` (boolean), `tags` (array of tag names), `translatedText`/`translatedLanguage`/`translatedAt`, `agentResponse`/`agentAt`.
+
+Schema **v2** (Dexie) adds a multi-entry index `*tags` on `translations` and a `tags` table keyed by `name` (`{ name, color, createdAt }`). The upgrade from v1 needs no data migration (verified with an existing v1 record). `status`, `error` and `favorite` are non-indexed fields.
+
+### Future backend API (NOT implemented)
+
+Favorites and tags are local-only today. All access goes through `audioTranslationDB` (`setFavorite`, `setRecordTags`,
+`getTags`, `addTag`, `updateTagColor`, `renameTag`, `deleteTag`), so a backend can replace it behind the same methods.
+Proposed contract for the `careless_whisper` service (not built):
+
+| Method + path | Purpose |
+| --- | --- |
+| `GET /transcripts?favorite=&tag=&q=&sort=&cursor=` | Server-side search/filter/pagination |
+| `PATCH /transcripts/{id}` `{ favorite?, tags? }` | Toggle favorite, set tags |
+| `GET /tags` / `POST /tags` `{ name, color }` | List / create tags |
+| `PATCH /tags/{name}` `{ name?, color? }` | Rename (cascades to transcripts) / recolor |
+| `DELETE /tags/{name}` | Delete and detach from transcripts |
+
+Open questions for that work: sync/conflict rules between local and server copies, whether audio is uploaded, and auth.
 
 ## 9. Known limitations / risks
 

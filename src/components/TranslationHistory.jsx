@@ -1,21 +1,32 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Card, Button, ListGroup, Badge, Alert, Modal } from "react-bootstrap";
+import { Card, Button, ListGroup, Badge, Alert, Modal, Form } from "react-bootstrap";
 import { tinykeys, defaultKeybindingsHandlerIgnore } from "tinykeys";
 import { useAudioTranslation } from "../context/AudioTranslationContext";
+import { useAuth } from "../context/AuthContext";
+import ConfirmModal from "./ConfirmModal";
+import TagChip from "./TagChip";
 
 function TranslationHistory() {
   const {
-    translations,
+    records: translations, // local + API (see context)
+    saveToAccount,
+    editText,
+    savingId,
     copyToClipboard,
     deleteTranslation,
     reprocessTranslation,
     isTranslating,
     runAction,
     actionBusy,
+    toggleFavorite,
+    tags,
   } = useAudioTranslation();
   const [copiedId, setCopiedId] = useState(null);
   const [playingId, setPlayingId] = useState(null);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [pendingSaveId, setPendingSaveId] = useState(null);
+  const [editing, setEditing] = useState(null); // { id, draft, saving, error }
+  const { isLoggedIn } = useAuth();
   const audioRef = useRef(null);
   const shortcutsRef = useRef({});
 
@@ -52,24 +63,48 @@ function TranslationHistory() {
   const stopAudio = useCallback(() => {
     const current = audioRef.current;
     audioRef.current = null;
-    if (current) current.audio.pause();
+    if (current) current.stop();
     setPlayingId(null);
   }, []);
 
   useEffect(() => stopAudio, [stopAudio]); // stop on unmount
 
+  // API records have no audio, so they are read aloud with the browser's speech synthesis
+  const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
+
+  const speak = (translation) => {
+    stopAudio();
+    const utterance = new SpeechSynthesisUtterance(translation.text);
+    // Whisper reports ISO 639-1 codes ("en", "es"); "unknown" leaves the voice default
+    if (/^[a-z]{2}$/.test(translation.language || "")) utterance.lang = translation.language;
+    const entry = { id: translation.id, stop: () => window.speechSynthesis.cancel() };
+    audioRef.current = entry;
+    setPlayingId(translation.id);
+    const finish = () => {
+      if (audioRef.current === entry) {
+        audioRef.current = null;
+        setPlayingId(null);
+      }
+    };
+    utterance.onend = finish;
+    utterance.onerror = finish;
+    window.speechSynthesis.speak(utterance);
+  };
+
   const playAudio = async (translation) => {
-    if (!translation.audioUrl) return;
+    const speakable = !translation.audioUrl && translation.source === "api" && canSpeak && translation.text;
+    if (!translation.audioUrl && !speakable) return;
 
     // Clicking the playing item again stops it
     if (audioRef.current?.id === translation.id) {
       stopAudio();
       return;
     }
+    if (speakable) return speak(translation);
 
     stopAudio();
     const audio = new Audio(translation.audioUrl);
-    const entry = { id: translation.id, audio };
+    const entry = { id: translation.id, stop: () => audio.pause() };
     audioRef.current = entry;
     setPlayingId(translation.id);
 
@@ -96,6 +131,26 @@ function TranslationHistory() {
   // Newest recording first, so the "latest" one is index 0
   const latest = translations[0];
   const pendingItem = translations.find((t) => t.id === pendingDeleteId);
+  const pendingSave = translations.find((t) => t.id === pendingSaveId);
+
+  const startEdit = (t) => setEditing({ id: t.id, draft: t.text || "", saving: false, error: "" });
+  const submitEdit = async (e) => {
+    e.preventDefault();
+    setEditing((x) => ({ ...x, saving: true, error: "" }));
+    try {
+      await editText(editing.id, editing.draft);
+      setEditing(null);
+    } catch (err) {
+      setEditing((x) => ({ ...x, saving: false, error: err.message }));
+    }
+  };
+
+  const confirmSave = async () => {
+    const id = pendingSaveId;
+    setPendingSaveId(null);
+    if (audioRef.current?.id === id) stopAudio();
+    await saveToAccount(id);
+  };
 
   // Deleting always goes through the confirmation modal
   const requestDelete = (id) => setPendingDeleteId(id);
@@ -245,6 +300,17 @@ function TranslationHistory() {
                       )}
                     </p>
                   )}
+                  {translation.favorite && translation.tags?.length > 0 && (
+                    <div className="mb-1">
+                      {translation.tags.map((name) => (
+                        <TagChip
+                          key={name}
+                          name={name}
+                          color={tags.find((t) => t.name === name)?.color}
+                        />
+                      ))}
+                    </div>
+                  )}
                   <div className="d-flex justify-content-between align-items-center">
                     <small className="text-muted">
                       {translation.id === latest.id && (
@@ -253,6 +319,18 @@ function TranslationHistory() {
                         </Badge>
                       )}
                       {formatDate(translation.timestamp)}
+                      <Badge
+                        bg={translation.source === "api" ? "info" : "secondary"}
+                        text={translation.source === "api" ? "dark" : undefined}
+                        className="ms-2"
+                        title={
+                          translation.source === "api"
+                            ? "Stored on the API (your account)"
+                            : "Stored only in this browser"
+                        }
+                      >
+                        {translation.source === "api" ? "API" : "Local"}
+                      </Badge>
                     </small>
                     {translation.duration > 0 && (
                       <Badge bg="light" text="dark" className="ms-2">
@@ -263,6 +341,25 @@ function TranslationHistory() {
                   </div>
                 </div>
                 <div className="history-actions d-flex flex-wrap gap-2 mt-3 mt-xl-0 ms-xl-3">
+                  <Button
+                    variant={translation.favorite ? "warning" : "outline-warning"}
+                    size="sm"
+                    onClick={() => toggleFavorite(translation.id)}
+                    className="history-action flex-fill flex-xl-grow-0"
+                    aria-pressed={!!translation.favorite}
+                    aria-label={
+                      translation.favorite ? "Remove from favorites" : "Add to favorites"
+                    }
+                    title={
+                      translation.favorite ? "Remove from favorites" : "Add to favorites"
+                    }
+                  >
+                    <i
+                      className={`bi ${
+                        translation.favorite ? "bi-star-fill" : "bi-star"
+                      }`}
+                    ></i>
+                  </Button>
                   <Button
                     variant="outline-primary"
                     size="sm"
@@ -288,7 +385,8 @@ function TranslationHistory() {
                       </>
                     )}
                   </Button>
-                  {translation.audioUrl && (
+                  {(translation.audioUrl ||
+                    (translation.source === "api" && canSpeak && translation.text)) && (
                     <Button
                       variant="outline-secondary"
                       size="sm"
@@ -318,6 +416,7 @@ function TranslationHistory() {
                       )}
                     </Button>
                   )}
+                  {translation.source !== "api" && (
                   <Button
                     variant="outline-info"
                     size="sm"
@@ -344,6 +443,44 @@ function TranslationHistory() {
                       </>
                     )}
                   </Button>
+                  )}
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={() => startEdit(translation)}
+                    className="history-action flex-fill flex-xl-grow-0"
+                    disabled={getStatus(translation) !== "done"}
+                    title="Edit the transcript text"
+                  >
+                    <i className="bi bi-pencil me-1"></i>
+                    Edit
+                  </Button>
+                  {translation.source !== "api" && isLoggedIn && (
+                    <Button
+                      variant="outline-primary"
+                      size="sm"
+                      onClick={() => setPendingSaveId(translation.id)}
+                      className="history-action flex-fill flex-xl-grow-0"
+                      disabled={!translation.text || savingId !== null}
+                      title="Store this transcript on your account (removes the local copy and its audio)"
+                    >
+                      {savingId === translation.id ? (
+                        <>
+                          <span
+                            className="spinner-border spinner-border-sm me-1"
+                            role="status"
+                            aria-hidden="true"
+                          ></span>
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <i className="bi bi-cloud-upload me-1"></i>
+                          Save to account
+                        </>
+                      )}
+                    </Button>
+                  )}
                   {["translate", "agent"].map((kind) => {
                     const busy =
                       actionBusy?.id === translation.id &&
@@ -479,7 +616,9 @@ function TranslationHistory() {
           </p>
         )}
         <p className="mb-0">
-          This removes the saved audio and its transcript. This cannot be undone.
+          {pendingItem?.source === "api"
+            ? "This removes the transcript from your account. This cannot be undone."
+            : "This removes the saved audio and its transcript. This cannot be undone."}
         </p>
       </Modal.Body>
       <Modal.Footer>
@@ -492,6 +631,48 @@ function TranslationHistory() {
         </Button>
       </Modal.Footer>
     </Modal>
+
+    <Modal show={editing !== null} onHide={() => setEditing(null)} centered size="lg">
+      <Form onSubmit={submitEdit}>
+        <Modal.Header closeButton>
+          <Modal.Title as="h5">Edit transcript</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {editing?.error && <Alert variant="danger">{editing.error}</Alert>}
+          <Form.Control
+            as="textarea"
+            rows={8}
+            value={editing?.draft ?? ""}
+            onChange={(e) => setEditing((x) => ({ ...x, draft: e.target.value }))}
+            autoFocus
+          />
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setEditing(null)}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" disabled={editing?.saving}>
+            Save
+          </Button>
+        </Modal.Footer>
+      </Form>
+    </Modal>
+
+    <ConfirmModal
+      show={pendingSaveId !== null}
+      title="Save to your account?"
+      confirmLabel="Yes, save"
+      onConfirm={confirmSave}
+      onCancel={() => setPendingSaveId(null)}
+    >
+      {pendingSave && (
+        <p className="mb-2">{truncateText(pendingSave.text, 140)}</p>
+      )}
+      <p className="mb-0">
+        The transcript is stored on the API and this local copy is removed. The API
+        keeps text only, so the audio recording is deleted from this browser.
+      </p>
+    </ConfirmModal>
     </>
   );
 }

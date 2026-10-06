@@ -10,6 +10,8 @@ A React web application for recording audio and transcribing it to text using a 
 - 💾 **Local Storage**: Store recordings and translations locally using IndexedDB
 - 📋 **Auto-Copy**: Automatically copy latest translation to clipboard
 - 📚 **Translation History**: Browse and manage previous translations
+- ⭐ **Favorites & tags**: Star transcripts, then tag favorites and filter by tag in the admin pages
+- 🗂️ **Transcripts admin**: Search, filter, tag and delete transcripts (`#/admin`, `#/admin/tags`)
 - 🌐 **Translate / Agent buttons**: Send a transcript to your own configurable endpoints
 - ⚙️ **Settings UI**: Override the `.env` defaults from the browser
 - 📤 **Export Options**: Export data to JSON, SQLite, or MongoDB
@@ -78,7 +80,8 @@ npm run build
 | Variable | Default | Description |
 | --- | --- | --- |
 | `VITE_TRANSCRIPTION_PROVIDER` | `local` | `local` (careless_whisper API) or `openai` (any OpenAI-compatible server) |
-| `VITE_TRANSCRIPTION_API_URL` | provider default (`http://localhost:8765` / `https://api.openai.com/v1`) | Base URL override, use your own endpoint |
+| `VITE_TRANSCRIPTION_API_URL` | provider default (`/whisper`, proxied to `http://localhost:8765` / `https://api.openai.com/v1`) | Base URL override, use your own endpoint |
+| `WHISPER_PROXY_TARGET` | `http://localhost:8765` | Where the dev/preview server forwards `/whisper/*` (not exposed to the browser) |
 | `VITE_WHISPER_MODEL` | `base` (local) / `whisper-1` (openai) | Model name sent to the service |
 | `VITE_TRANSCRIPTION_API_KEY` | _empty_ | Optional bearer token (bundled into client code, not a secret) |
 
@@ -163,7 +166,31 @@ curl http://localhost:8765/health
 
 The agent has `KeepAlive` and `RunAtLoad`, so it restarts on crash and at login.
 
+### Using the app from a phone (or another device)
+
+Two browser rules apply: the microphone only works on a **secure origin** (https or `localhost`), and an https page
+can't call an `http://` LAN address. So:
+
+1. Start the dev server with HTTPS and LAN access:
+   ```bash
+   npm run dev:lan
+   ```
+   It prints a `Network: https://<your-mac-ip>:3000/` address. Open that on the phone (same Wi-Fi). The certificate is
+   self-signed, so accept the browser warning once.
+2. The default transcription URL is the same-origin path `/whisper`, which the Vite dev/preview server forwards to the
+   local service (`http://localhost:8765`, override with `WHISPER_PROXY_TARGET` in `.env`). The phone never talks to the
+   Whisper API directly. If your `.env` still has `VITE_TRANSCRIPTION_API_URL=http://localhost:8765`, change it to
+   `/whisper` (or delete the line), or set the URL to empty in Settings; otherwise the phone will try its own `localhost`.
+3. The Translate/Agent endpoints you configure are called straight from the phone's browser, so they must be reachable
+   from the phone, allow CORS, and be `https://` (an https page can't call plain `http://` addresses).
+
+`npm run dev` (plain http, localhost only) is still the normal desktop workflow.
+
 ### Troubleshooting
+
+- **`ERR_SSL_PROTOCOL_ERROR` ("localhost sent an invalid response")** – the browser is using `https://` against a server that only speaks `http://`. `npm run dev` serves plain **http** (`http://localhost:3000`); only `npm run dev:lan` serves https. Type the `http://` address explicitly (or `http://127.0.0.1:3000`) if the browser autocompletes `https://`.
+
+- **"Recording needs a secure connection" / `Cannot read properties of undefined (reading 'getUserMedia')`** – the page was opened over plain `http://` on a LAN address. Use `npm run dev:lan` and the `https://` address.
 
 - **"Cannot reach transcription service"** – the agent is not running or the URL is wrong. Run `make status` in the service repo and `curl http://localhost:8765/health`.
 - **`400 Unsupported file format`** – the API only accepts mp3, wav, m4a, ogg, flac, webm, mp4.
@@ -179,6 +206,21 @@ The agent has `KeepAlive` and `RunAtLoad`, so it restarts on crash and at login.
 5. **Browse History**: View all previous translations in the history panel
 6. **Reprocess Translations**: Click the reprocess button on any translation to re-run Whisper on the stored audio
 7. **Export Data**: Open the menu (☰, top right) → **Export data** to export your translations in various formats
+
+## Favorites, tags and the admin pages
+
+Use the ☰ menu → **Transcripts admin** / **Tag manager** (routes `#/admin` and `#/admin/tags`).
+
+- **Favorite**: the ⭐ button on a history item or admin row toggles it.
+- **Tag manager** (`#/admin/tags`): create tags (name + color), rename/recolor, delete (always asks for confirmation; the
+  transcripts are kept). Each tag shows how many transcripts/favorites use it, with a **Favorites** link that opens the
+  filtered list.
+- **Tagging**: only favorites can be tagged. In the Transcripts tab, click the tags button on a favorite to pick tags
+  or create one on the spot. Un-favoriting keeps the tags but hides them on the home page.
+- **Filtering** (`#/admin`): search (transcript, translation, agent reply, tags), **Favorites only**, tag chips (match
+  any selected), sort by date, **Clear filters**. Links like `#/admin?fav=1&tag=work` preselect filters.
+- Tags and favorites are stored locally (IndexedDB, same place as the recordings) and are included in the JSON export.
+  There is no backend for them yet; see the PRD for the proposed API.
 
 ## Keyboard shortcuts
 

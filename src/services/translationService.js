@@ -8,12 +8,15 @@ import { getSettings } from "./settings";
 // `buildRequest` returns { url, init }. Both providers reply with { text }.
 export const providers = {
   // careless_whisper API: POST {base}/transcribe-text-only?model=... -> { text }
+  // (or /transcribe -> { id, transcription, ... } when storing on an account)
   local: {
-    defaultUrl: "http://localhost:8765",
+    // Same-origin path proxied by the Vite dev/preview server to the local service
+    // (see vite.config.js). Works from a phone, where "localhost" would be the phone.
+    defaultUrl: "/whisper",
     defaultModel: "base",
-    buildRequest({ baseUrl, model, apiKey }, formData) {
+    buildRequest({ baseUrl, model, apiKey, path = "/transcribe-text-only" }, formData) {
       return {
-        url: `${baseUrl}/transcribe-text-only?model=${encodeURIComponent(model)}`,
+        url: `${baseUrl}${path}?model=${encodeURIComponent(model)}`,
         init: { method: "POST", body: formData, headers: authHeaders(apiKey) },
       };
     },
@@ -72,15 +75,19 @@ function getExtension(blob) {
   return EXTENSION_BY_MIME[mime] || "webm";
 }
 
-export async function translateAudio(audioBlob) {
+// Returns { text, remoteId }. With a user token (local provider only) the API stores the
+// transcript on the account and `remoteId` is its id; otherwise remoteId is null.
+export async function transcribeAudio(audioBlob, { token } = {}) {
   const config = resolveConfig();
   const { baseUrl } = config;
+  const store = !!token && config.provider === "local";
 
   const formData = new FormData();
   formData.append("file", audioBlob, `audio.${getExtension(audioBlob)}`);
 
+  // /transcribe (unlike /transcribe-text-only) returns the stored transcript's id
   const { url, init } = providers[config.provider].buildRequest(
-    config,
+    store ? { ...config, apiKey: token, path: "/transcribe" } : config,
     formData
   );
 
@@ -99,9 +106,19 @@ export async function translateAudio(audioBlob) {
     } catch {
       // non-JSON error body, keep statusText
     }
-    throw new Error(`${response.status} ${detail}`);
+    throw Object.assign(new Error(`${response.status} ${detail}`), {
+      status: response.status,
+    });
   }
 
   const result = await response.json();
-  return typeof result.text === "string" ? result.text.trim() : "";
+  const text = result.text ?? result.transcription;
+  return {
+    text: typeof text === "string" ? text.trim() : "",
+    remoteId: store && result.id != null ? result.id : null,
+  };
+}
+
+export async function translateAudio(audioBlob) {
+  return (await transcribeAudio(audioBlob)).text;
 }
