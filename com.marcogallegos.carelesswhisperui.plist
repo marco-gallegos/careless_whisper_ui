@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.marcogallegos.carelesswhisperui</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/marco.gallegos/.nvm/versions/node/v24.21.0/bin/node</string>
+        <string>/Users/marco.gallegos/code/js/careless_whisper_ui/node_modules/vite/bin/vite.js</string>
+        <string>preview</string>
+        <string>--host</string>
+        <string>127.0.0.1</string>
+        <string>--port</string>
+        <string>3000</string>
+        <string>--strictPort</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/marco.gallegos/code/js/careless_whisper_ui/logs/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/marco.gallegos/code/js/careless_whisper_ui/logs/stderr.log</string>
+    <key>WorkingDirectory</key>
+    <string>/Users/marco.gallegos/code/js/careless_whisper_ui</string>
+</dict>
+</plist>
